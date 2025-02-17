@@ -13,29 +13,22 @@ fastapi_users = FastAPIUsers[User, uuid.UUID](
     [auth_backend],
 )
 
-users_router = APIRouter(
-    prefix="/api/users",
-    tags=["Users"]
+users_router = APIRouter()
+
+users_router.include_router(
+    fastapi_users.get_auth_router(auth_backend),
+    prefix="/auth/jwt",
+    tags=["auth"],
 )
 
 users_router.include_router(
-    fastapi_users.get_auth_router(auth_backend)
+    fastapi_users.get_register_router(UserRead, UserCreate),
+    prefix="/auth",
+    tags=["auth"],
 )
 
 users_router.include_router(
-    fastapi_users.get_register_router(
-        user_schema=UserRead,
-        user_create_schema=UserCreate
-    ),
-    prefix="",
-    tags=["Register"]
-)
-
-users_router.include_router(
-    fastapi_users.get_users_router(
-        user_schema=UserRead,
-        user_update_schema=UserUpdate
-    ),
-    prefix="",
-    tags=["Users"]
+    fastapi_users.get_users_router(UserRead, UserUpdate),
+    prefix="/users",
+    tags=["users"],
 )
