@@ -4,11 +4,13 @@ SQLalchemy ORM models
 
 
 from datetime import datetime
+from uuid import UUID
 
 from sqlalchemy import ForeignKey, String, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
+from src.users.models import User
 
 
 class Category(Base):
@@ -41,5 +43,24 @@ class News(Base):
     )
 
     category: Mapped[Category | None] = relationship("Category", back_populates="news")
+    comments: Mapped[list["Comment"]] = relationship("Comment", back_populates="news")
+
+
+class Comment(Base):
+    """
+    Comment model
+    """
+    __tablename__ = "comment"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    text: Mapped[str] = mapped_column(String(length=255), nullable=False)
+    created: Mapped[datetime] = mapped_column(default=datetime.utcnow())
+    updated: Mapped[datetime] = mapped_column(default=datetime.utcnow())
+
+    news_id: Mapped[int] = mapped_column(ForeignKey("news.id", ondelete="CASCADE"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"))
+
+    news: Mapped[News] = relationship("News", back_populates="comments")
+    user: Mapped[User] = relationship("User", back_populates="comments")
 
 

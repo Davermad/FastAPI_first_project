@@ -1,6 +1,7 @@
 """
 Pydantic schemas for news app
 """
+from uuid import UUID
 
 from datetime import datetime
 
@@ -52,3 +53,32 @@ class CategoryCreate(BaseModel):
     Category create schema
     """
     name: str
+
+
+
+class CommentReadSchema(BaseModel):
+    id: int
+    text: str
+    created: datetime
+    updated: datetime
+    user_id: UUID
+
+
+
+class CommentCreate(BaseModel):
+    text: str
+    news_id: int
+
+class CommentUpdate(BaseModel):
+    text: str
+
+class CommentRead(BaseModel):
+    id: int
+    text: str
+    created: datetime
+    updated: datetime
+    user_id: UUID
+    news_id: int
+
+    class Config:
+        from_attributes = True

@@ -1,15 +1,18 @@
 from typing import Sequence
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select
 
-from .models import Category, News
+from .models import Category, News, Comment
 from .schemas import (CategoryCreate,
                       CategoryRead,
                       NewsCreate,
-                      NewsRead,NewsItemRead,)
+                      NewsRead, NewsItemRead,
+                      CommentCreate, CommentUpdate, CommentRead)
 
+from src.users.auth import current_active_user
 from src import session as async_session
+from ..users.models import User
 
 category_router = APIRouter(
     prefix="/categories",
@@ -19,6 +22,11 @@ category_router = APIRouter(
 news_router = APIRouter(
     prefix="/news",
     tags=["News"]
+)
+
+comment_router = APIRouter(
+    prefix="/comments",
+    tags=["Comments"]
 )
 
 
@@ -54,7 +62,7 @@ async def create_news_item(news_item: NewsCreate) -> News:
     Create news item
     """
     async with async_session() as session:
-        query = select(Category).filter(Category.id==news_item.category_id)
+        query = select(Category).filter(Category.id == news_item.category_id)
         result = await session.execute(query)
         category = result.scalar_one_or_none()
 
@@ -123,7 +131,6 @@ async def partial_update_news_item(news_id: int, news_item: NewsCreate) -> News:
         await session.commit()
         await session.refresh(old_news_item)
         return old_news_item
-
 
 
 @category_router.get("", response_model=Sequence[CategoryRead])
@@ -219,3 +226,88 @@ async def partial_update_category(category_id: int, category: CategoryCreate) ->
         await session.commit()
         await session.refresh(old_category)
         return old_category
+
+
+@comment_router.get("", response_model=Sequence[CommentRead])
+async def get_comments(offset: int = 0, limit: int = 10) -> Sequence[Comment]:
+    """
+    Get all comments
+    """
+    async with async_session() as session:
+        query = select(Comment).offset(offset).limit(limit)
+        result = await session.execute(query)
+        comments = result.scalars().all()
+        return comments
+
+
+@comment_router.get("/{comment_id}", response_model=CommentRead)
+async def get_comment(comment_id: int) -> Comment:
+    """
+    Get comment by id
+    """
+    async with async_session() as session:
+        query = select(Comment).filter(Comment.id == comment_id)
+        result = await session.execute(query)
+        comment = result.scalar_one_or_none()
+        if comment is None:
+            raise HTTPException(status_code=404, detail="Comment not found")
+        return comment
+
+
+@comment_router.post("", response_model=CommentRead)
+async def create_comment(comment: CommentCreate, user: User = Depends(current_active_user)) -> Comment:
+    """
+    Create comment
+    """
+    async with async_session() as session:
+        query = select(News).filter(News.id == comment.news_id)
+        result = await session.execute(query)
+        news = result.scalar_one_or_none()
+        if news is None:
+            raise HTTPException(status_code=404, detail="News not found")
+
+        new_comment = Comment(**comment.dict(), user_id=user.id)
+        session.add(new_comment)
+        await session.commit()
+        await session.refresh(new_comment)
+        return new_comment
+
+
+@comment_router.delete("/{comment_id}")
+async def delete_comment(comment_id: int, user: User = Depends(current_active_user)) -> None:
+    """
+    Delete comment by id
+    """
+    async with async_session() as session:
+        query = select(Comment).filter(Comment.id == comment_id)
+        result = await session.execute(query)
+        comment = result.scalar_one_or_none()
+        if comment is None:
+            raise HTTPException(status_code=404, detail="Comment not found")
+        if comment.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+        await session.delete(comment)
+        await session.commit()
+
+
+@comment_router.put("/{comment_id}", response_model=CommentRead)
+async def update_comment(comment_id: int, comment_in: CommentUpdate,
+                         user: User = Depends(current_active_user)) -> Comment:
+    """
+    Update comment by id
+    """
+    async with async_session() as session:
+        query = select(Comment).filter(Comment.id == comment_id)
+        result = await session.execute(query)
+        comment = result.scalar_one_or_none()
+        if comment is None:
+            raise HTTPException(status_code=404, detail="Comment not found")
+        if comment.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+
+        for field, value in comment_in.dict().items():
+            setattr(comment, field, value)
+
+        await session.commit()
+        await session.refresh(comment)
+        return comment
